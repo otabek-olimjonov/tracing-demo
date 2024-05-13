@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources-configmap
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service:9090
+        uid: PBFA97CFB590B2093
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-server
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: grafana-server
+  template:
+    metadata:
+      labels:
+        app: grafana-server
+    spec:
+      containers:
+      - name: grafana-server
+        image: grafana/grafana
+        env:
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "true"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: grafana-datasources-volume
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboards-volume
+          mountPath: /etc/grafana/provisioning/dashboards
+      volumes:
+      - name: grafana-datasources-volume
+        configMap:
+          name: grafana-datasources-configmap
+          defaultMode: 420
+      - name: grafana-dashboards-volume
+        configMap:
+          name: grafana-dashboards-configmap
+          defaultMode: 420
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana-service
+  ports:
+  - port: 3000
+    targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-port
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector:
+    app: grafana-server
+  ports:
+  - port: 3000
+    nodePort: 30003

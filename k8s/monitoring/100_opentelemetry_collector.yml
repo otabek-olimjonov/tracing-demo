@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-configmap
+  namespace: monitoring
+data:
+  config.yml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:8889
+      otlp:
+        endpoint: jaeger-service:4317
+        tls:
+          insecure: true
+    connectors:
+      spanmetrics:
+    processors:
+      batch:
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [spanmetrics, otlp]
+        metrics/spanmetrics:
+          receivers: [otlp, spanmetrics]
+          exporters: [prometheus]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opentelemetry-collector-server
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: opentelemetry-collector-server
+  template:
+    metadata:
+      labels:
+        app: opentelemetry-collector-server
+    spec:
+      volumes:
+        - name: otel-config-volume
+          configMap:
+            name: otel-configmap
+            defaultMode: 420
+      containers:
+        - name: otel
+          image: otel/opentelemetry-collector-contrib:latest
+          args: ["--config", "/etc/otelcol/config.yml"]
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          ports:
+            - containerPort: 4317 # otlp grpc
+              protocol: TCP
+            - containerPort: 4318 # otlp http
+              protocol: TCP
+            - containerPort: 8889 # exporters - prometheus
+              protocol: TCP
+          volumeMounts:
+            - name: otel-config-volume
+              mountPath: /etc/otelcol
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opentelemetry-collector-service
+  namespace: monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: "http"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8889"
+spec:
+  type: ClusterIP
+  selector:
+    app: opentelemetry-collector-server
+  ports:
+    - name: otel-grpc-port
+      protocol: TCP
+      port: 4317
+    - name: otel-http-port
+      protocol: TCP
+      port: 4318
+    - name: prometheus-metrics-port
+      protocol: TCP
+      port: 8889

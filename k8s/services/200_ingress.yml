@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  namespace: demo
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /greeter/v1/
+            pathType: Prefix
+            backend:
+              service:
+                name: greeter-service
+                port:
+                  number: 8080
+          - path: /streamer2/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: streamer2-service
+                port:
+                  number: 8080
+  ingressClassName: nginx

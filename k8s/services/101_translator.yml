@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: translator-server
+  namespace: demo
+spec:
+  selector:
+    matchLabels:
+      app: translator-server
+  template:
+    metadata:
+      labels:
+        app: translator-server
+    spec:
+      containers:
+      - name: translator-server
+        image: translator:latest
+        imagePullPolicy: Never
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "250m"
+        env:
+          - name: REDIS_SERVICE_URL
+            value: redis://redis-service:6379
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: http://otel-endpoint:4317
+          - name: OTEL_EXPORTER_OTLP_INSECURE
+            value: "true"
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
